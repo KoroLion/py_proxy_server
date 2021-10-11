@@ -1,4 +1,5 @@
 import os
+import sys
 import socket
 import shutil
 from threading import Thread
@@ -69,7 +70,7 @@ def handle_connection(client_sock, addr):
         http_packet, host_addr = prepare_http(http_packet)
 
     new_request = http_packet.encode()
-    print(new_request)
+    # print(new_request)
 
     server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_sock.connect(host_addr)
@@ -88,6 +89,13 @@ def handle_connection(client_sock, addr):
 
 
 def main():
+    host, port = HOST, PORT
+
+    if len(sys.argv) > 1:
+        host = sys.argv[1]
+    if len(sys.argv) > 2:
+        port = int(sys.argv[2])
+
     cert_path_split = ROOT_CERT_KEY.split('/')
     base_ca_path = '/'.join(cert_path_split[:len(cert_path_split) - 1])
     if not Path(base_ca_path).exists():
@@ -98,9 +106,9 @@ def main():
     if not Path(CERTS_PATH).exists():
         os.makedirs(CERTS_PATH)
 
-    serv = socket.create_server((HOST, PORT))
+    serv = socket.create_server((host, port))
     serv.listen(32)
-    print('Proxy serving at {}:{}'.format(HOST, PORT))
+    print('Proxy serving at {}:{}'.format(host, port))
     while True:
         sock, addr = serv.accept()
         print('Connection from {}'.format(addr))

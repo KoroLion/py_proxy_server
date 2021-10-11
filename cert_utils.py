@@ -1,12 +1,13 @@
 import os
 import subprocess
 from random import randrange
+from pathlib import Path
 
-RND_FILE = 'temp.rnd'
+RND_FILE = './temp.rnd'
 
 
 def exec(command, env):
-    subprocess.call(command, env=env)
+    subprocess.call(command, env=env, shell=True)
 
 
 def generate_root_cert(name: str, ca_crt: str, ca_key: str, cert_key: str):
@@ -22,7 +23,7 @@ def generate_root_cert(name: str, ca_crt: str, ca_key: str, cert_key: str):
 
 def generate_cert(host: str, ca_crt: str, ca_key: str, cert_key: str) -> bytes:
     cert_request_command = 'openssl req -new -key {} -subj "/CN={}" -sha256'.format(cert_key, host)
-    cert_req = subprocess.check_output(cert_request_command)
+    cert_req = subprocess.check_output(cert_request_command, shell=True)
 
     env = os.environ.copy()
     env['RANDFILE'] = RND_FILE
@@ -32,8 +33,12 @@ def generate_cert(host: str, ca_crt: str, ca_key: str, cert_key: str) -> bytes:
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        env=env
+        env=env,
+        shell=True
     )
     cert = proc.communicate(cert_req)[0]
-    os.unlink(RND_FILE)
+
+    if Path(RND_FILE).exists():
+        os.unlink(RND_FILE)
+
     return cert
