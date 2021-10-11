@@ -51,7 +51,11 @@ def prepare_http(http_packet: HttpPacket) -> (HttpPacket, tuple):
 
     if http_packet.headers.get('Proxy-Connection', None):
         del http_packet.headers['Proxy-Connection']
-    http_packet.request = ' '.join([method, url.path, protocol])
+
+    path = url.path
+    if url.query:
+        path += '?' + url.query
+    http_packet.start_line = ' '.join([method, path, protocol])
 
     return http_packet, host_addr
 
@@ -67,7 +71,9 @@ def handle_connection(client_sock, addr):
         https = True
         client_sock, http_packet, host_addr = prepare_https(http_packet, client_sock)
     else:
+        print(http_packet.start_line)
         http_packet, host_addr = prepare_http(http_packet)
+        print(http_packet.start_line)
 
     new_request = http_packet.encode()
     # print(new_request)
