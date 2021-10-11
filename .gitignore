@@ -1,1 +1,4 @@
 .idea
+root_cert
+certs
+__pycache__
