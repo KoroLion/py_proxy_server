@@ -7,13 +7,14 @@ from pathlib import Path
 import ssl
 from urllib.parse import urlparse
 import sqlite3
-from time import time
 import json
 
 from flask import Flask
 
-from http_utils import receive_http, HttpPacket, CONNECTION_ESTABLISHED_RESPONSE
-from cert_utils import generate_cert, generate_root_cert
+from utils.http_utils import receive_http, HttpPacket, CONNECTION_ESTABLISHED_RESPONSE
+from utils.cert_utils import generate_cert, generate_root_cert
+from utils.db_utils import create_tables, save_to_db
+from utils.file_utils import read_file
 
 CERTS_PATH = './certs'
 
@@ -28,49 +29,59 @@ PORT = 8000
 
 # con = sqlite3.connect(':memory:', check_same_thread=False)
 con = sqlite3.connect('wolf.sqlite', check_same_thread=False)
-cur = con.cursor()
 mutex = Lock()
 
 app = Flask(__name__)
 
 @app.route('/api/requests')
 def api_requests_page():
-    cur.execute('SELECT time, protocol, method, url, request, response FROM requests')
+    cur = con.cursor()
+    cur.execute('SELECT id, time, protocol, method, url, request, response FROM requests ORDER BY id DESC')
     data = cur.fetchall()
     parsed_data = []
     for entry in data:
         parsed_data.append({
-            'time': entry[0],
-            'protocol': entry[1],
-            'method': entry[2],
-            'url': entry[3],
-            'request': entry[4],
-            'response': entry[5]
+            'id': entry[0],
+            'time': entry[1],
+            'protocol': entry[2],
+            'method': entry[3],
+            'url': entry[4],
+            'request': entry[5],
+            'response': entry[6]
         })
 
     return json.dumps(parsed_data)
 
 
+@app.route('/api/requests/<id>')
+def api_request_page(id):
+    cur = con.cursor()
+    cur.execute('SELECT id, time, protocol, method, url, request, response FROM requests WHERE id = ?', (int(id), ))
+    data = cur.fetchall()
+    entry = data[0]
+    request = {
+        'id': entry[0],
+        'time': entry[1],
+        'protocol': entry[2],
+        'method': entry[3],
+        'url': entry[4],
+        'request': entry[5],
+        'response': entry[6]
+    }
+
+    return json.dumps(request)
+
+
 @app.route('/requests')
 def requests_page():
-    f = open('./templates/requests.html', 'r')
-    template = f.read()
-    f.close()
-
+    template = read_file('./templates/requests.html')
     return template
 
 
-def save_to_db(con, protocol, method, url, request: str, response: str):
-    t = round(time())
-    stmt = "INSERT INTO requests (time, protocol, method, url, request, response) VALUES (?, ?, ?, ?, ?, ?)"
-    values = (t, protocol, method, url, request, response)
-
-    mutex.acquire()
-
-    con.cursor().execute(stmt, values)
-    con.commit()
-
-    mutex.release()
+@app.route('/requests/<id>')
+def request_page(id):
+    template = read_file('./templates/request.html')
+    return template
 
 
 def prepare_https(http_packet: HttpPacket, client_sock) -> (socket.socket, HttpPacket, tuple):
@@ -118,7 +129,12 @@ def handle_connection(client_sock, addr, con):
 
     if request.method == 'CONNECT':
         https = True
-        client_sock, request, host_addr = prepare_https(request, client_sock)
+        try:
+            client_sock, request, host_addr = prepare_https(request, client_sock)
+        except Exception as e:
+            print('ERROR: while trying to establish https connection')
+            client_sock.close()
+            return
     else:
         request, host_addr = prepare_http(request)
 
@@ -135,7 +151,7 @@ def handle_connection(client_sock, addr, con):
     server_sock.close()
 
     protocol = 'https' if https else 'http'
-    save_to_db(con, protocol, request.method, request.url, str(request), str(response))
+    save_to_db(con, mutex, protocol, request.method, request.url, str(request), str(response))
 
     new_response = response.encode()
 
@@ -161,9 +177,7 @@ def main():
     if not Path(CERTS_PATH).exists():
         os.makedirs(CERTS_PATH)
 
-    cur = con.cursor()
-    cur.execute('CREATE TABLE IF NOT EXISTS requests (id INTEGER PRIMARY KEY, time INTEGER, protocol TEXT, method TEXT, url TEXT, request TEXT, response TEXT)')
-    con.commit()
+    create_tables(con)
 
     flask_thread = Thread(target=app.run, kwargs={'host': host, 'port': 8080})
     flask_thread.start()

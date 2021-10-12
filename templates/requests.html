@@ -1,26 +1,64 @@
 <html>
 <head>
   <title>Requests</title>
+
+  <style>
+    tr:hover {
+      cursor: pointer;
+      background-color: orange;
+    }
+  </style>
 </head>
 <body>
-  <table id="requestsTable">
+  <table>
+    <thead>
+      <tr>
+        <th>id</th>
+        <th>time</th>
+        <th>protocol</th>
+        <th>method</th>
+        <th>url</th>
+      </tr>
+    </thead>
+
+    <tbody id="requestsTable">
+    </tbody>
   </table>
 
   <script>
+    let prevLength = 0;
+
     async function main() {
       const resp = await fetch('/api/requests');
-      const requests = JSON.parse(await resp.text())
+      const content = await resp.text();
 
+      if (content.length <= prevLength) {
+        return;
+      }
+      prevLength = content.length;
+
+      const requests = JSON.parse(content)
+
+      requestsTable.innerHTML = '';
       for (const request of requests) {
-        requestsTable.innerHTML += `<tr>
+        const tr = document.createElement('tr');
+        tr.innerHTML += `
+          <td>${request.id}</td>
           <td>${request.time}</td>
           <td>${request.protocol}</td>
           <td>${request.method}</td>
           <td>${request.url}</td>
-        </tr>`;
+        `;
+        requestsTable.append(tr);
+
+        tr.addEventListener('click', (ev) => {
+          window.location.replace(`/requests/${request.id}`);
+        });
       }
     }
     main()
+    setInterval(main, 3000);
+
   </script>
 </body>
 </html>

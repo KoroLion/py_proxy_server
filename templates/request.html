@@ -1,0 +1,58 @@
+<html>
+<head>
+    <title>Request</title>
+
+    <style>
+        textarea {
+            width: 49%;
+            height: 480px;
+        }
+
+        button {
+            width: 100%;
+            height: 64px;
+        }
+    </style>
+</head>
+<body>
+    <a href="/requests"><-- Back</a>
+
+    <div id="httpSession">
+        <div id="info">
+            <div>Time: <span id="timeSpan"></span></div>
+            <div>Protocol: <span id="protocolSpan"></span></div>
+            <div>Method: <span id="methodSpan"></span></div>
+            <div>URL: <span id="urlSpan"></span></div>
+        </div>
+
+        <textarea id="requestTextarea">
+        </textarea>
+
+        <textarea id="responseTextarea">
+        </textarea>
+
+        <button>RESEND</button>
+    </div>
+
+<script>
+    async function main() {
+        const path = location.pathname.split('/')
+        const id = path[path.length - 1]
+        const resp = await fetch(`/api/requests/${id}`);
+        const content = await resp.text()
+
+        const request = JSON.parse(content)
+
+        timeSpan.innerHTML = request.time;
+        protocolSpan.innerHTML = request.protocol;
+        methodSpan.innerHTML = request.method;
+
+        urlSpan.innerHTML = request.url;
+
+        requestTextarea.value = request.request;
+        responseTextarea.value = request.response;
+    }
+    main()
+</script>
+</body>
+</html>
