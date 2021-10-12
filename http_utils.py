@@ -9,13 +9,22 @@ class HttpPacket:
     headers: dict
     body: bytes
 
+    method: str
+    url: str
+    protocol: str
+
     def __init__(self, start_line: str, headers: dict, body: bytes):
         self.start_line = start_line
         self.headers = headers
         self.body = body
 
+        self.method, self.url, self.protocol = self.start_line.split(' ', 2)
+
     def encode(self):
         return self.start_line.encode() + b'\r\n' + encode_headers(self.headers) + b'\r\n\r\n' + self.body
+
+    def __str__(self):
+        return self.encode().decode()
 
 
 def encode_headers(headers: dict) -> bytes:

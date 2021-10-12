@@ -20,10 +20,8 @@ PORT = 8000
 
 
 def prepare_https(http_packet: HttpPacket, client_sock) -> (socket.socket, HttpPacket, tuple):
-    method, url, protocol = http_packet.start_line.split(' ', 2)
-
     client_sock.sendall(CONNECTION_ESTABLISHED_RESPONSE)
-    host, port = url.split(':')
+    host, port = http_packet.url.split(':')
     host_addr = (host, int(port))
 
     cert_path = '{}/{}.crt'.format(CERTS_PATH, host)
@@ -41,9 +39,7 @@ def prepare_https(http_packet: HttpPacket, client_sock) -> (socket.socket, HttpP
 
 
 def prepare_http(http_packet: HttpPacket) -> (HttpPacket, tuple):
-    method, url, protocol = http_packet.start_line.split(' ', 2)
-
-    url = urlparse(url)
+    url = urlparse(http_packet.url)
 
     host = url.hostname
     port = 80 if url.port is None else url.port
@@ -55,19 +51,18 @@ def prepare_http(http_packet: HttpPacket) -> (HttpPacket, tuple):
     path = url.path
     if url.query:
         path += '?' + url.query
-    http_packet.start_line = ' '.join([method, path, protocol])
+    http_packet.start_line = ' '.join([http_packet.method, path, http_packet.protocol])
 
     return http_packet, host_addr
 
 
 def handle_connection(client_sock, addr):
     http_packet = receive_http(client_sock)
-    method, url, protocol = http_packet.start_line.split(' ', 2)
 
     host_addr = (None, None)
     https = False
 
-    if method == 'CONNECT':
+    if http_packet.method == 'CONNECT':
         https = True
         client_sock, http_packet, host_addr = prepare_https(http_packet, client_sock)
     else:
