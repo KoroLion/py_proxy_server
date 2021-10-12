@@ -22,7 +22,7 @@
             <div>Time: <span id="timeSpan"></span></div>
             <div>Protocol: <span id="protocolSpan"></span></div>
             <div>Method: <span id="methodSpan"></span></div>
-            <div>URL: <span id="urlSpan"></span></div>
+            <div>URL: <a href="#" id="urlLink"></a></div>
         </div>
 
         <textarea id="requestTextarea">
@@ -31,7 +31,7 @@
         <textarea id="responseTextarea">
         </textarea>
 
-        <button>RESEND</button>
+        <button id="resendBtn">RESEND</button>
     </div>
 
 <script>
@@ -47,10 +47,29 @@
         protocolSpan.innerHTML = request.protocol;
         methodSpan.innerHTML = request.method;
 
-        urlSpan.innerHTML = request.url;
+        urlLink.innerHTML = request.url;
+        urlLink.href = request.url;
 
         requestTextarea.value = request.request;
         responseTextarea.value = request.response;
+
+        resendBtn.addEventListener('click', async (ev) => {
+            resendBtn.disabled = true
+            const resp = await fetch('/api/requests/send', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    url: request.url,
+                    protocol: request.protocol,
+                    request: requestTextarea.value
+                })
+            });
+            const content = await resp.text();
+            responseTextarea.value = content;
+            resendBtn.disabled = false;
+        });
     }
     main()
 </script>

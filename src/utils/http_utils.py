@@ -1,3 +1,6 @@
+import socket
+import ssl
+
 from email.parser import BytesParser
 
 RECV_SIZE = 4096
@@ -34,6 +37,20 @@ def encode_headers(headers: dict) -> bytes:
     headers_str = headers_str[:len(headers_str) - 2]  # removing excess \r\n
 
     return headers_str.encode()
+
+
+def send_request(host_addr: tuple, request: bytes, https: bool = False) -> HttpPacket:
+    server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    if https:
+        server_sock = ssl.wrap_socket(server_sock)
+
+    server_sock.connect(host_addr)
+    server_sock.sendall(request)
+
+    response = receive_http(server_sock)
+    server_sock.close()
+
+    return response
 
 
 def receive_http(sock) -> HttpPacket:

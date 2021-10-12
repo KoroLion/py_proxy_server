@@ -1,8 +1,11 @@
 FROM python
 
-WORKDIR /proxy_server
+WORKDIR /proxy_server/src
 COPY . .
 
-EXPOSE 8080
+RUN pip install -r ../requirements.txt
 
-CMD python proxy_server.py 0.0.0.0 8080
+EXPOSE 8080
+EXPOSE 8000
+
+CMD python main.py 0.0.0.0 8080 0.0.0.0 8000
