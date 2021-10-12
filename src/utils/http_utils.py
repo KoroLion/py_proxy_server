@@ -1,3 +1,6 @@
+import socket
+import ssl
+
 from email.parser import BytesParser
 
 RECV_SIZE = 4096
@@ -9,13 +12,26 @@ class HttpPacket:
     headers: dict
     body: bytes
 
+    method: str
+    url: str
+    protocol: str
+
     def __init__(self, start_line: str, headers: dict, body: bytes):
         self.start_line = start_line
         self.headers = headers
         self.body = body
 
+        self.method, self.url, self.protocol = self.start_line.split(' ', 2)
+
     def encode(self):
         return self.start_line.encode() + b'\r\n' + encode_headers(self.headers) + b'\r\n\r\n' + self.body
+
+    def __str__(self):
+        encoded = self.encode()
+        try:
+            return encoded.decode()
+        except Exception:
+            return str(encoded)
 
 
 def encode_headers(headers: dict) -> bytes:
@@ -25,6 +41,20 @@ def encode_headers(headers: dict) -> bytes:
     headers_str = headers_str[:len(headers_str) - 2]  # removing excess \r\n
 
     return headers_str.encode()
+
+
+def send_request(host_addr: tuple, request: bytes, https: bool = False) -> HttpPacket:
+    server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    if https:
+        server_sock = ssl.wrap_socket(server_sock)
+
+    server_sock.connect(host_addr)
+    server_sock.sendall(request)
+
+    response = receive_http(server_sock)
+    server_sock.close()
+
+    return response
 
 
 def receive_http(sock) -> HttpPacket:
