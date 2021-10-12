@@ -27,7 +27,11 @@ class HttpPacket:
         return self.start_line.encode() + b'\r\n' + encode_headers(self.headers) + b'\r\n\r\n' + self.body
 
     def __str__(self):
-        return self.encode().decode()
+        encoded = self.encode()
+        try:
+            return encoded.decode()
+        except Exception:
+            return str(encoded)
 
 
 def encode_headers(headers: dict) -> bytes:
