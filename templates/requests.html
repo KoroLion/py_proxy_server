@@ -1,0 +1,26 @@
+<html>
+<head>
+  <title>Requests</title>
+</head>
+<body>
+  <table id="requestsTable">
+  </table>
+
+  <script>
+    async function main() {
+      const resp = await fetch('/api/requests');
+      const requests = JSON.parse(await resp.text())
+
+      for (const request of requests) {
+        requestsTable.innerHTML += `<tr>
+          <td>${request.time}</td>
+          <td>${request.protocol}</td>
+          <td>${request.method}</td>
+          <td>${request.url}</td>
+        </tr>`;
+      }
+    }
+    main()
+  </script>
+</body>
+</html>

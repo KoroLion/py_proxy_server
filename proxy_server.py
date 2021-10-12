@@ -2,21 +2,75 @@ import os
 import sys
 import socket
 import shutil
-from threading import Thread
+from threading import Thread, Lock
 from pathlib import Path
 import ssl
 from urllib.parse import urlparse
+import sqlite3
+from time import time
+import json
+
+from flask import Flask
 
 from http_utils import receive_http, HttpPacket, CONNECTION_ESTABLISHED_RESPONSE
 from cert_utils import generate_cert, generate_root_cert
 
 CERTS_PATH = './certs'
+
+ROOT_CA_NAME = 'LioKor Proxy CA'
 ROOT_CA_CRT = './root_cert/ca.crt'
 ROOT_CA_KEY = './root_cert/ca.key'
 ROOT_CERT_KEY = './root_cert/cert.key'
 
 HOST = '127.0.0.1'
 PORT = 8000
+
+
+# con = sqlite3.connect(':memory:', check_same_thread=False)
+con = sqlite3.connect('wolf.sqlite', check_same_thread=False)
+cur = con.cursor()
+mutex = Lock()
+
+app = Flask(__name__)
+
+@app.route('/api/requests')
+def api_requests_page():
+    cur.execute('SELECT time, protocol, method, url, request, response FROM requests')
+    data = cur.fetchall()
+    parsed_data = []
+    for entry in data:
+        parsed_data.append({
+            'time': entry[0],
+            'protocol': entry[1],
+            'method': entry[2],
+            'url': entry[3],
+            'request': entry[4],
+            'response': entry[5]
+        })
+
+    return json.dumps(parsed_data)
+
+
+@app.route('/requests')
+def requests_page():
+    f = open('./templates/requests.html', 'r')
+    template = f.read()
+    f.close()
+
+    return template
+
+
+def save_to_db(con, protocol, method, url, request: str, response: str):
+    t = round(time())
+    stmt = "INSERT INTO requests (time, protocol, method, url, request, response) VALUES (?, ?, ?, ?, ?, ?)"
+    values = (t, protocol, method, url, request, response)
+
+    mutex.acquire()
+
+    con.cursor().execute(stmt, values)
+    con.commit()
+
+    mutex.release()
 
 
 def prepare_https(http_packet: HttpPacket, client_sock) -> (socket.socket, HttpPacket, tuple):
@@ -56,22 +110,19 @@ def prepare_http(http_packet: HttpPacket) -> (HttpPacket, tuple):
     return http_packet, host_addr
 
 
-def handle_connection(client_sock, addr):
-    http_packet = receive_http(client_sock)
+def handle_connection(client_sock, addr, con):
+    request = receive_http(client_sock)
 
     host_addr = (None, None)
     https = False
 
-    if http_packet.method == 'CONNECT':
+    if request.method == 'CONNECT':
         https = True
-        client_sock, http_packet, host_addr = prepare_https(http_packet, client_sock)
+        client_sock, request, host_addr = prepare_https(request, client_sock)
     else:
-        print(http_packet.start_line)
-        http_packet, host_addr = prepare_http(http_packet)
-        print(http_packet.start_line)
+        request, host_addr = prepare_http(request)
 
-    new_request = http_packet.encode()
-    # print(new_request)
+    new_request = request.encode()
 
     server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_sock.connect(host_addr)
@@ -80,10 +131,13 @@ def handle_connection(client_sock, addr):
 
     server_sock.sendall(new_request)
 
-    http_packet = receive_http(server_sock)
+    response = receive_http(server_sock)
     server_sock.close()
 
-    new_response = http_packet.encode()
+    protocol = 'https' if https else 'http'
+    save_to_db(con, protocol, request.method, request.url, str(request), str(response))
+
+    new_response = response.encode()
 
     client_sock.sendall(new_response)
     client_sock.close()
@@ -102,10 +156,17 @@ def main():
     if not Path(base_ca_path).exists():
         shutil.rmtree(CERTS_PATH)
         os.makedirs(base_ca_path)
-        generate_root_cert('LioKor Proxy CA', ROOT_CA_CRT, ROOT_CA_KEY, ROOT_CERT_KEY)
+        generate_root_cert(ROOT_CA_NAME, ROOT_CA_CRT, ROOT_CA_KEY, ROOT_CERT_KEY)
 
     if not Path(CERTS_PATH).exists():
         os.makedirs(CERTS_PATH)
+
+    cur = con.cursor()
+    cur.execute('CREATE TABLE IF NOT EXISTS requests (id INTEGER PRIMARY KEY, time INTEGER, protocol TEXT, method TEXT, url TEXT, request TEXT, response TEXT)')
+    con.commit()
+
+    flask_thread = Thread(target=app.run, kwargs={'host': host, 'port': 8080})
+    flask_thread.start()
 
     serv = socket.create_server((host, port))
     serv.listen(32)
@@ -113,7 +174,7 @@ def main():
     while True:
         sock, addr = serv.accept()
         print('Connection from {}'.format(addr))
-        thread = Thread(target=handle_connection, args=(sock, addr, ))
+        thread = Thread(target=handle_connection, args=(sock, addr, con, ))
         thread.start()
 
 
