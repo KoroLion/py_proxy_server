@@ -2,7 +2,7 @@ import logging
 import json
 from urllib.parse import urlparse
 
-from flask import Flask, Blueprint, current_app, request
+from flask import Flask, Blueprint, current_app, request, redirect
 
 from utils.file_utils import read_file
 from utils.http_utils import send_request
@@ -42,7 +42,7 @@ def api_requests_send():
 @requests_app.route('/api/requests', methods=['GET'])
 def api_requests_page():
     cur = current_app.config['con'].cursor()
-    cur.execute('SELECT id, time, protocol, method, url, request, response FROM requests ORDER BY id DESC')
+    cur.execute('SELECT id, time, protocol, method, url, request, response FROM requests ORDER BY id DESC LIMIT 75')
     data = cur.fetchall()
     parsed_data = []
     for entry in data:
@@ -90,3 +90,8 @@ def requests_page():
 def request_page(id):
     template = read_file('./templates/request.html')
     return template
+
+
+@requests_app.route('/', methods=['GET'])
+def main_page():
+    return redirect('/requests')
